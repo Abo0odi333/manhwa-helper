@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Client-Side Image Tool</title>
+    <title>Universal Client-Side Image Tool (ZIP Output)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body {
             font-family: 'Calibri', sans-serif;
@@ -92,13 +93,15 @@
             color: #7f8c8d;
             margin-top: 5px;
             text-align: center;
-            max-height: 100px;
+            max-height: 120px;
             overflow-y: auto;
             width: 80%;
             border: 1px solid #eee;
             border-radius: 5px;
-            padding: 5px;
+            padding: 8px;
             display: none;
+            white-space: pre-line;
+            background: #fafafa;
         }
         input[type="number"] {
             width: 100px;
@@ -140,6 +143,14 @@
         .btn-split:hover { background-color: #27ae60; }
         .btn-merge { background-color: #e67e22; }
         .btn-merge:hover { background-color: #d35400; }
+
+        .loading-text {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -173,7 +184,8 @@
         </div>
 
         <div class="form-group">
-            <button class="action-btn btn-split" onclick="processSplit()">🚀 Start Splitting Process</button>
+            <button id="btn-split-action" class="action-btn btn-split" onclick="processSplit()">🚀 Start Splitting Process</button>
+            <div id="split-loading" class="loading-text">Processing and creating ZIP file... Please wait.</div>
         </div>
     </div>
 
@@ -198,13 +210,13 @@
         </div>
 
         <div class="form-group">
-            <button class="action-btn btn-merge" onclick="processMerge()">🔗 Start Merging & Redistribution Now</button>
+            <button id="btn-merge-action" class="action-btn btn-merge" onclick="processMerge()">🔗 Start Merging & Redistribution Now</button>
+            <div id="merge-loading" class="loading-text">Merging, splitting, and packing into ZIP... Please wait.</div>
         </div>
     </div>
 </div>
 
 <script>
-    // التنقل بين التبويبات
     function switchTab(tabId) {
         document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -213,7 +225,6 @@
         event.currentTarget.classList.add('active');
     }
 
-    // تحديث نص واجهة اختيار صورة للتقطيع
     const splitInput = document.getElementById('split-input');
     const splitStatus = document.getElementById('split-status');
     splitInput.addEventListener('change', () => {
@@ -223,7 +234,6 @@
         }
     });
 
-    // تحديث نص واجهة اختيار صور متعددة للدمج
     const mergeInput = document.getElementById('merge-input');
     const mergeStatus = document.getElementById('merge-status');
     mergeInput.addEventListener('change', () => {
@@ -234,13 +244,11 @@
         }
     });
 
-    // ترتيب طبيعي ذكي للملفات لتجنب لخبطة الأسماء الرقمية
     function naturalSort(files) {
         const collator = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
         return Array.from(files).sort((a, b) => collator.compare(a.name, b.name));
     }
 
-    // دالة مساعدة لتحميل الصورة برمجياً لـ Canvas
     function loadImage(file) {
         return new Promise((resolve, reject) => {
             const img = new Image();
@@ -250,15 +258,22 @@
         });
     }
 
-    // دالة مساعدة لبدء تحميل الملف تلقائياً للمتصفح
-    function downloadCanvasImage(canvas, filename) {
+    // دالة مساعدة لتحويل الـ Canvas إلى ملف (Blob) بصيغة ثنائية لتخزينه في الـ ZIP
+    function canvasToBlob(canvas) {
+        return new Promise((resolve) => {
+            canvas.toBlob((blob) => resolve(blob), 'image/png');
+        });
+    }
+
+    // دالة مساعدة لبدء تحميل ملف الـ ZIP النهائي للمستخدم
+    function downloadZipFile(blob, filename) {
         const link = document.createElement('a');
         link.download = filename;
-        link.href = canvas.toDataURL('image/png');
+        link.href = URL.createObjectURL(blob);
         link.click();
     }
 
-    // ==================== منطق عملية التقطيع (Split) ====================
+    // ==================== منطق التقطيع وحفظ النتيجة كـ ZIP ====================
     async function processSplit() {
         if (splitInput.files.length === 0) {
             alert("Please select a long image first!");
@@ -270,6 +285,11 @@
             return;
         }
 
+        const btn = document.getElementById('btn-split-action');
+        const loading = document.getElementById('split-loading');
+        btn.disabled = true;
+        loading.style.display = 'block';
+
         try {
             const file = splitInput.files[0];
             const img = await loadImage(file);
@@ -280,6 +300,8 @@
             const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
             const namingMethod = document.querySelector('input[name="split-naming"]:checked').value;
 
+            // إنشاء كائن الـ ZIP الجديد
+            const zip = new JSZip();
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = width;
@@ -294,15 +316,26 @@
                 ctx.drawImage(img, 0, top, width, currentPieceHeight, 0, 0, width, currentPieceHeight);
 
                 let outputName = (namingMethod === "numeric") ? `${i+1}.png` : `${originalName}_part_${i+1}.png`;
-                downloadCanvasImage(canvas, outputName);
+                
+                // تحويل الصورة لبيانات ثنائية وإضافتها لملف الـ ZIP
+                const imageBlob = await canvasToBlob(canvas);
+                zip.file(outputName, imageBlob);
             }
-            alert("Image split successfully! Check your browser downloads folder.");
+
+            // توليد ملف الـ ZIP وتنزيله دفعة واحدة
+            const zipContent = await zip.generateAsync({type: "blob"});
+            downloadZipFile(zipContent, `${originalName}_split_pieces.zip`);
+            
+            alert("Success! All pieces have been generated and downloaded inside one ZIP file.");
         } catch (e) {
             alert("An error occurred during splitting: " + e.message);
+        } finally {
+            btn.disabled = false;
+            loading.style.display = 'none';
         }
     }
 
-    // ==================== منطق عملية الدمج والتقسيم (Merge & Redistribute) ====================
+    // ==================== منطق الدمج والتقسيم وحفظ النتيجة كـ ZIP ====================
     async function processMerge() {
         if (mergeInput.files.length === 0) {
             alert("Please select images to merge first!");
@@ -313,6 +346,11 @@
             alert("Please enter a valid number of output files!");
             return;
         }
+
+        const btn = document.getElementById('btn-merge-action');
+        const loading = document.getElementById('merge-loading');
+        btn.disabled = true;
+        loading.style.display = 'block';
 
         try {
             const sortedFiles = naturalSort(mergeInput.files);
@@ -350,6 +388,8 @@
             const firstFileName = sortedFiles[0].name.substring(0, sortedFiles[0].name.lastIndexOf('.')) || sortedFiles[0].name;
             const namingMethod = document.querySelector('input[name="merge-naming"]:checked').value;
 
+            // إنشاء كائن الـ ZIP للدمج
+            const zip = new JSZip();
             const sliceCanvas = document.createElement('canvas');
             sliceCanvas.width = maxWidth;
             const sliceCtx = sliceCanvas.getContext('2d');
@@ -363,12 +403,21 @@
                 sliceCtx.drawImage(mainCanvas, 0, top, maxWidth, currentPieceHeight, 0, 0, maxWidth, currentPieceHeight);
 
                 let outputName = (namingMethod === "numeric") ? `${i+1}.png` : `${firstFileName}_part_${i+1}.png`;
-                downloadCanvasImage(sliceCanvas, outputName);
+                
+                const imageBlob = await canvasToBlob(sliceCanvas);
+                zip.file(outputName, imageBlob);
             }
 
-            alert("Images merged and redistributed into PNG successfully! Check your browser downloads folder.");
+            // توليد ملف الـ ZIP وتنزيله دفعة واحدة
+            const zipContent = await zip.generateAsync({type: "blob"});
+            downloadZipFile(zipContent, `${firstFileName}_redistributed_output.zip`);
+
+            alert("Success! Images merged, redistributed and downloaded inside one ZIP file.");
         } catch (e) {
             alert("An error occurred during merging: " + e.message);
+        } finally {
+            btn.disabled = false;
+            loading.style.display = 'none';
         }
     }
 </script>
