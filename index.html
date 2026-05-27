@@ -286,8 +286,7 @@
 
             for (let i = 0; i < numPieces; i++) {
                 let top = i * pieceHeight;
-                let bottom = (i === numPieces - 1) ? height : (i + 1) * piece_height;
-                if (i === numPieces - 1) bottom = height; // القطعة الأخيرة تأخذ المتبقي
+                let bottom = (i === numPieces - 1) ? height : (i + 1) * pieceHeight;
                 
                 let currentPieceHeight = bottom - top;
                 canvas.height = currentPieceHeight;
@@ -316,11 +315,9 @@
         }
 
         try {
-            // الترتيب الطبيعي للملفات المحددة
             const sortedFiles = naturalSort(mergeInput.files);
             const openedImages = [];
             
-            // تحميل كل الصور ومعرفة العرض الأقصى
             for (let file of sortedFiles) {
                 const img = await loadImage(file);
                 openedImages.push(img);
@@ -328,7 +325,6 @@
             
             const maxWidth = Math.max(...openedImages.map(img => img.width));
             
-            // حساب الارتفاع الإجمالي بعد تعديل قياسات عرض كل الصور لتتناسب
             let totalHeight = 0;
             const imageRenderData = [];
 
@@ -339,20 +335,17 @@
                 totalHeight += newHeight;
             }
 
-            // إنشاء Canvas عملاق وسيط في الذاكرة (PNG Canvas غير محدود الأبعاد)
             const mainCanvas = document.createElement('canvas');
             mainCanvas.width = maxWidth;
             mainCanvas.height = totalHeight;
             const mainCtx = mainCanvas.getContext('2d');
 
-            // رسم الصور تتابعياً خلف بعضها على اللوحة العملاقة
             let currentY = 0;
             for (let data of imageRenderData) {
-                mainCtx.drawImage(data.img, 0, current_y, maxWidth, data.height);
+                mainCtx.drawImage(data.img, 0, currentY, maxWidth, data.height);
                 currentY += data.height;
             }
 
-            // البدء في تقطيع اللوحة العملاقة بالتساوي على عدد المخرجات المطلوبة
             const pieceHeight = Math.floor(totalHeight / numOutputs);
             const firstFileName = sortedFiles[0].name.substring(0, sortedFiles[0].name.lastIndexOf('.')) || sortedFiles[0].name;
             const namingMethod = document.querySelector('input[name="merge-naming"]:checked').value;
