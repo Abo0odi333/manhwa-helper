@@ -1,377 +1,384 @@
-import os
-import re
-import tkinter as tk
-from tkinter import messagebox, filedialog
-from PIL import Image
-import customtkinter as ctk
-
-# إلغاء الحد الأقصى تماماً لحجم البكسلات في Pillow للتعامل مع الصور العملاقة جداً
-Image.MAX_IMAGE_PIXELS = None
-
-ctk.set_appearance_mode("System")
-ctk.set_default_color_theme("blue")
-
-def natural_sort_key(s):
-    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
-
-# ==================== قاموس النصوص للغتين ====================
-LANG_TEXTS = {
-    "ar": {
-        "window_title": "الأداة الشاملة لمعالجة الصور الطويلة والعملاقة",
-        "tab_split": "✂️ تقطيع صورة طويلة",
-        "tab_merge": "🔗 دمج وإعادة تقسيم الصور (PNG)",
-        "split_title": "تقطيع صورة عمودية طويلة إلى عدة قطع متساوية",
-        "btn_select_split_img": "📁 اختر الصورة الطويلة المراد تقطيعها",
-        "no_img_selected": "لم يتم اختيار صورة بعد",
-        "btn_select_split_dir": "📂 اختر مجلد حفظ القطع الناتجة",
-        "default_dir_split": "سيتم الحفظ في مجلد الصورة الأصلي كخيار افتراضي",
-        "lbl_pieces_count": "عدد القطع المطلوبة:",
-        "lbl_naming_method": "طريقة تسمية الملفات الناتجة:",
-        "rb_split_num": "أرقام مباشرة فقط (مثل: 1.png)",
-        "rb_split_basic": "اسم الملف الأصلي + رقم (مثل: image_part_1.png)",
-        "btn_start_split": "🚀 ابدأ عملية التقطيع",
-        "merge_title": "دمج الصور وتوزيعها بالتساوي على عدد ملفات محدد",
-        "btn_select_merge_imgs": "📁 اختر الصور بالترتيب المطلوب",
-        "scroll_label": "الصور المحددة للدمج وإعادة التقسيم:",
-        "no_imgs_selected": "لم يتم اختيار أي صور حتى الآن.",
-        "btn_select_merge_dir": "📂 اختر مجلد حفظ الملفات الناتجة",
-        "default_dir_merge": "سيتم الحفظ في مجلد الصور الأصلي كخيار افتراضي",
-        "lbl_outputs_count": "عدد الصور النهائية المطلوبة بعد التوزيع:",
-        "lbl_merge_naming": "طريقة تسمية الملفات الناتجة:",
-        "rb_merge_num": "أرقام مباشرة فقط (مثل: 1.png)",
-        "rb_merge_basic": "اسم أول ملف + رقم (مثل: output_1.png)",
-        "btn_start_merge": "🔗 ابدأ دمج وإعادة تقسيم الصور الآن",
-        "warn_select_img": "الرجاء اختيار صورة لتقطيعها أولاً!",
-        "err_invalid_pieces": "الرجاء إدخال عدد قطع صحيح أكبر من الصفر!",
-        "success_split": "تم تقطيع الصورة بنجاح وتصديرها للمجلد المحدد!",
-        "warn_select_merge": "الرجاء اختيار الصور أولاً!",
-        "err_invalid_outputs": "الرجاء إدخال عدد مخرجات صحيح أكبر من الصفر!",
-        "success_merge": "تم دمج الصور وتقسيمها بالتساوي إلى ملفات PNG بنجاح وبأعلى جودة كاملة!",
-        "err_occurred": "حدث خطأ أثناء المعالجة:\n",
-        "dialog_title_warn": "تنبيه",
-        "dialog_title_err": "خطأ",
-        "dialog_title_success": "نجاح"
-    },
-    "en": {
-        "window_title": "Universal Long Image Tool",
-        "tab_split": "Split Long Image",
-        "tab_merge": "Merge & Redistribute Images",
-        "split_title": "Slice a Long Vertical Image into Equal Pieces",
-        "btn_select_split_img": "📁 Select Long Image to Split",
-        "no_img_selected": "No image selected yet",
-        "btn_select_split_dir": "📂 Select Output Folder for Pieces",
-        "default_dir_split": "Default: Saves in the original image directory",
-        "lbl_pieces_count": "Required Number of Pieces:",
-        "lbl_naming_method": "Output Files Naming Method:",
-        "rb_split_num": "Numbers only (e.g., 1.png, 2.png)",
-        "rb_split_basic": "Original name + Number (e.g., image_part_1.png)",
-        "btn_start_split": "🚀 Start Splitting Process",
-        "merge_title": "Merge Images & Evenly Redistribute into Fixed File Count",
-        "btn_select_merge_imgs": "📁 Select Images in Order",
-        "scroll_label": "Selected Images for Merging & Redistribution:",
-        "no_imgs_selected": "No images selected yet.",
-        "btn_select_merge_dir": "📂 Select Output Folder for Final Files",
-        "default_dir_merge": "Default: Saves in the original images directory",
-        "lbl_outputs_count": "Number of Final Output Files Required:",
-        "lbl_merge_naming": "Output Files Naming Method:",
-        "rb_merge_num": "Numbers only (e.g., 1.png, 2.png)",
-        "rb_merge_basic": "First file name + Number (e.g., output_1.png)",
-        "btn_start_merge": "🔗 Start Merging & Redistribution Now",
-        "warn_select_img": "Please select an image to split first!",
-        "err_invalid_pieces": "Please enter a valid positive number for pieces!",
-        "success_split": "Image split successfully and saved to the chosen folder!",
-        "warn_select_merge": "Please select images first!",
-        "err_invalid_outputs": "Please enter a valid number of output files!",
-        "success_merge": "Images merged and redistributed evenly into PNG successfully with maximum lossless quality!",
-        "err_occurred": "An error occurred:\n",
-        "dialog_title_warn": "Warning",
-        "dialog_title_err": "Error",
-        "dialog_title_success": "Success"
-    }
-}
-
-# ==================== نافذة اختيار اللغة البدئية ====================
-class LanguageSelector(ctk.CTk):
-    def __init__(self):
-        super().__init__()
-        self.title("Language Select")
-        self.geometry("340x200")
-        self.resizable(False, False)
-        self.eval('tk::PlaceWindow . center')
-        self.selected_lang = None
-
-        lbl = ctk.CTkLabel(self, text="Please select your language\nالرجاء اختيار اللغة", font=("Calibri", 16, "bold"))
-        lbl.pack(pady=20)
-
-        btn_ar = ctk.CTkButton(self, text="العربية (Arabic)", font=("Calibri", 14, "bold"), height=35, command=lambda: self.set_language("ar"))
-        btn_ar.pack(pady=5)
-
-        btn_en = ctk.CTkButton(self, text="English", font=("Calibri", 14, "bold"), height=35, fg_color="#2ecc71", hover_color="#27ae60", command=lambda: self.set_language("en"))
-        btn_en.pack(pady=5)
-
-    def set_language(self, lang):
-        self.selected_lang = lang
-        self.destroy()
-
-# ==================== واجهة الأداة الرئيسية ====================
-class UniversalImageTool(ctk.CTk):
-    def __init__(self, lang):
-        super().__init__()
-        self.lang = lang
-        self.t = LANG_TEXTS[lang]
-
-        self.title(self.t["window_title"])
-        self.geometry("760x740")
-        self.minsize(680, 680)
-
-        self.split_source_image = ""
-        self.split_output_dir = ""
-        self.merge_source_files = []
-        self.merge_output_dir = ""
-
-        self.font_title = ("Calibri", 22, "bold")       
-        self.font_sub_title = ("Calibri", 16, "bold")   
-        self.font_button = ("Calibri", 16, "bold")      
-        self.font_regular = ("Calibri", 15)             
-        self.font_path = ("Calibri", 13, "italic")      
-
-        self.tab_view = ctk.CTkTabview(self, width=720, height=700)
-        self.tab_view._segmented_button.configure(font=("Calibri", 16, "bold")) 
-        self.tab_view.pack(pady=15, padx=15, fill="both", expand=True)
-
-        self.tab_view.add(self.t["tab_split"])
-        self.tab_view.add(self.t["tab_merge"])
-
-        self.setup_split_tab()
-        self.setup_merge_tab()
-
-    def setup_split_tab(self):
-        tab = self.tab_view.tab(self.t["tab_split"])
-        lbl = ctk.CTkLabel(tab, text=self.t["split_title"], font=self.font_title)
-        lbl.pack(pady=20)
-
-        self.btn_split_file = ctk.CTkButton(tab, text=self.t["btn_select_split_img"], command=self.browse_split_file, font=self.font_button, height=45)
-        self.btn_split_file.pack(pady=5)
-        self.lbl_split_file = ctk.CTkLabel(tab, text=self.t["no_img_selected"], font=self.font_path, text_color="gray")
-        self.lbl_split_file.pack(pady=2)
-
-        self.btn_split_dir = ctk.CTkButton(tab, text=self.t["btn_select_split_dir"], command=self.browse_split_dir, fg_color="#9b59b6", hover_color="#8e44ad", font=self.font_button, height=45)
-        self.btn_split_dir.pack(pady=12)
-        self.lbl_split_dir = ctk.CTkLabel(tab, text=self.t["default_dir_split"], font=self.font_path, text_color="gray")
-        self.lbl_split_dir.pack(pady=2)
-
-        frame = ctk.CTkFrame(tab, fg_color="transparent")
-        frame.pack(pady=15)
-
-        if self.lang == "ar":
-            ctk.CTkLabel(frame, text=self.t["lbl_pieces_count"], font=self.font_sub_title).grid(row=0, column=1, padx=15, pady=5, sticky="e")
-            self.entry_split_pieces = ctk.CTkEntry(frame, width=100, height=35, justify="center", font=self.font_regular)
-            self.entry_split_pieces.grid(row=0, column=0, padx=15, pady=5)
-        else:
-            ctk.CTkLabel(frame, text=self.t["lbl_pieces_count"], font=self.font_sub_title).grid(row=0, column=0, padx=15, pady=5, sticky="w")
-            self.entry_split_pieces = ctk.CTkEntry(frame, width=100, height=35, justify="center", font=self.font_regular)
-            self.entry_split_pieces.grid(row=0, column=1, padx=15, pady=5)
-            
-        self.entry_split_pieces.insert(0, "5")
-
-        ctk.CTkLabel(tab, text=self.t["lbl_naming_method"], font=self.font_sub_title).pack(pady=8)
-        self.split_naming_var = ctk.StringVar(value="basic")
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Client-Side Image Tool</title>
+    <style>
+        body {
+            font-family: 'Calibri', sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 750px;
+            background: #ffffff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            padding: 30px;
+            box-sizing: border-box;
+        }
+        h1 {
+            text-align: center;
+            font-size: 26px;
+            color: #2c3e50;
+            margin-bottom: 25px;
+        }
+        .tabs {
+            display: flex;
+            justify-content: space-around;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 25px;
+        }
+        .tab-btn {
+            padding: 12px 25px;
+            font-size: 16px;
+            font-weight: bold;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #7f8c8d;
+            transition: all 0.3s ease;
+        }
+        .tab-btn.active {
+            color: #3498db;
+            border-bottom: 3px solid #3498db;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        label {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #2c3e50;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .file-upload-btn {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .file-upload-btn:hover { background-color: #2980b9; }
+        .merge-btn-color { background-color: #e67e22; }
+        .merge-btn-color:hover { background-color: #d35400; }
         
-        rb1 = ctk.CTkRadioButton(tab, text=self.t["rb_split_num"], variable=self.split_naming_var, value="numeric", font=self.font_regular)
-        rb1.pack(pady=4)
-        rb2 = ctk.CTkRadioButton(tab, text=self.t["rb_split_basic"], variable=self.split_naming_var, value="basic", font=self.font_regular)
-        rb2.pack(pady=4)
+        .file-status {
+            font-size: 13px;
+            font-style: italic;
+            color: #7f8c8d;
+            margin-top: 5px;
+            text-align: center;
+            max-height: 100px;
+            overflow-y: auto;
+            width: 80%;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            padding: 5px;
+            display: none;
+        }
+        input[type="number"] {
+            width: 100px;
+            height: 35px;
+            font-size: 15px;
+            text-align: center;
+            border: 2px solid #bdc3c7;
+            border-radius: 6px;
+            font-family: 'Calibri', sans-serif;
+        }
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            margin-top: 5px;
+        }
+        .radio-option {
+            display: flex;
+            align-items: center;
+            font-size: 15px;
+            cursor: pointer;
+        }
+        .radio-option input { margin-right: 8px; }
+        
+        .action-btn {
+            width: 80%;
+            height: 50px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.2s;
+        }
+        .btn-split { background-color: #2ecc71; }
+        .btn-split:hover { background-color: #27ae60; }
+        .btn-merge { background-color: #e67e22; }
+        .btn-merge:hover { background-color: #d35400; }
+    </style>
+</head>
+<body>
 
-        self.btn_run_split = ctk.CTkButton(tab, text=self.t["btn_start_split"], font=("Calibri", 18, "bold"), fg_color="#2ecc71", hover_color="#27ae60", height=50, command=self.run_splitting)
-        self.btn_run_split.pack(pady=30, padx=60, fill="x")
-
-    def setup_merge_tab(self):
-        tab = self.tab_view.tab(self.t["tab_merge"])
-        lbl = ctk.CTkLabel(tab, text=self.t["merge_title"], font=self.font_title)
-        lbl.pack(pady=20)
-
-        self.btn_merge_files = ctk.CTkButton(tab, text=self.t["btn_select_merge_imgs"], command=self.browse_merge_files, font=self.font_button, height=45)
-        self.btn_merge_files.pack(pady=5)
-
-        self.merge_scroll = ctk.CTkScrollableFrame(tab, width=550, height=140, label_text=self.t["scroll_label"])
-        self.merge_scroll._label.configure(font=self.font_sub_title) 
-        self.merge_scroll.pack(pady=8, fill="x", padx=40)
-        self.lbl_no_merge = ctk.CTkLabel(self.merge_scroll, text=self.t["no_imgs_selected"], font=self.font_regular, text_color="gray")
-        self.lbl_no_merge.pack(pady=25)
-
-        self.btn_merge_dir = ctk.CTkButton(tab, text=self.t["btn_select_merge_dir"], command=self.browse_merge_dir, fg_color="#9b59b6", hover_color="#8e44ad", font=self.font_button, height=45)
-        self.btn_merge_dir.pack(pady=12)
-        self.lbl_merge_dir = ctk.CTkLabel(tab, text=self.t["default_dir_merge"], font=self.font_path, text_color="gray")
-        self.lbl_merge_dir.pack(pady=2)
-
-        frame = ctk.CTkFrame(tab, fg_color="transparent")
-        frame.pack(pady=10)
-
-        if self.lang == "ar":
-            ctk.CTkLabel(frame, text=self.t["lbl_outputs_count"], font=self.font_sub_title).grid(row=0, column=1, padx=15, pady=5, sticky="e")
-            self.entry_merge_outputs = ctk.CTkEntry(frame, width=100, height=35, justify="center", font=self.font_regular)
-            self.entry_merge_outputs.grid(row=0, column=0, padx=15, pady=5)
-        else:
-            ctk.CTkLabel(frame, text=self.t["lbl_outputs_count"], font=self.font_sub_title).grid(row=0, column=0, padx=15, pady=5, sticky="w")
-            self.entry_merge_outputs = ctk.CTkEntry(frame, width=100, height=35, justify="center", font=self.font_regular)
-            self.entry_merge_outputs.grid(row=0, column=1, padx=15, pady=5)
-            
-        self.entry_merge_outputs.insert(0, "20")
-
-        ctk.CTkLabel(tab, text=self.t["lbl_merge_naming"], font=self.font_sub_title).pack(pady=8)
-        self.merge_naming_var = ctk.StringVar(value="basic")
-
-        rb1 = ctk.CTkRadioButton(tab, text=self.t["rb_merge_num"], variable=self.merge_naming_var, value="numeric", font=self.font_regular)
-        rb1.pack(pady=4)
-        rb2 = ctk.CTkRadioButton(tab, text=self.t["rb_merge_basic"], variable=self.merge_naming_var, value="basic", font=self.font_regular)
-        rb2.pack(pady=4)
-
-        self.btn_run_merge = ctk.CTkButton(tab, text=self.t["btn_start_merge"], font=("Calibri", 18, "bold"), fg_color="#e67e22", hover_color="#d35400", height=50, command=self.run_merging)
-        self.btn_run_merge.pack(pady=25, padx=60, fill="x")
-
-    def browse_split_file(self):
-        types = [("Image Files", "*.png *.jpg *.jpeg *.webp *.bmp")]
-        file = filedialog.askopenfilename(title="Select File", filetypes=types)
-        if file:
-            self.split_source_image = file
-            self.lbl_split_file.configure(text=os.path.basename(file), text_color="#3498db")
-            if not self.split_output_dir:
-                self.lbl_split_dir.configure(text=os.path.dirname(file))
-
-    def browse_split_dir(self):
-        folder = filedialog.askdirectory(title="Select Folder")
-        if folder:
-            self.split_output_dir = folder
-            self.lbl_split_dir.configure(text=folder, text_color="#2ecc71")
-
-    def browse_merge_files(self):
-        types = [("Image Files", "*.png *.jpg *.jpeg *.webp *.bmp")]
-        files = filedialog.askopenfilenames(title="Select Files", filetypes=types)
-        if files:
-            self.merge_source_files = list(files)
-            self.merge_source_files.sort(key=natural_sort_key)
-
-            for w in self.merge_scroll.winfo_children():
-                w.destroy()
-
-            for i, f in enumerate(self.merge_source_files, 1):
-                lbl = ctk.CTkLabel(self.merge_scroll, text=f"◀ [{i}] - {os.path.basename(f)}", font=("Calibri", 14), anchor="w")
-                lbl.pack(fill="x", padx=12, pady=2)
-
-            if not self.merge_output_dir:
-                self.lbl_merge_dir.configure(text=os.path.dirname(self.merge_source_files[0]))
-
-    def browse_merge_dir(self):
-        folder = filedialog.askdirectory(title="Select Save Folder")
-        if folder:
-            self.merge_output_dir = folder
-            self.lbl_merge_dir.configure(text=folder, text_color="#2ecc71")
-
-    def run_splitting(self):
-        if not self.split_source_image:
-            messagebox.showwarning(self.t["dialog_title_warn"], self.t["warn_select_img"])
-            return
-
-        try:
-            num_pieces = int(self.entry_split_pieces.get())
-            if num_pieces <= 0: raise ValueError
-        except ValueError:
-            messagebox.showerror(self.t["dialog_title_err"], self.t["err_invalid_pieces"])
-            return
-
-        target_dir = self.split_output_dir if self.split_output_dir else os.path.dirname(self.split_source_image)
-
-        try:
-            img = Image.open(self.split_source_image)
-            width, height = img.size
-            piece_height = height // num_pieces
-
-            img_name = os.path.basename(self.split_source_image)
-            name_without_ext, ext = os.path.splitext(img_name)
-
-            for i in range(num_pieces):
-                top = i * piece_height
-                bottom = height if i == num_pieces - 1 else (i + 1) * piece_height
-
-                box = (0, top, width, bottom)
-                cropped_piece = img.crop(box)
-
-                if self.split_naming_var.get() == "numeric":
-                    output_name = f"{i+1}{ext}"
-                else:
-                    output_name = f"{name_without_ext}_part_{i+1}{ext}"
-
-                cropped_piece.save(os.path.join(target_dir, output_name))
-
-            messagebox.showinfo(self.t["dialog_title_success"], self.t["success_split"])
-            os.startfile(target_dir)
-
-        except Exception as e:
-            messagebox.showerror(self.t["dialog_title_err"], f"{self.t['err_occurred']}{str(e)}")
-
-    def run_merging(self):
-        if not self.merge_source_files:
-            messagebox.showwarning(self.t["dialog_title_warn"], self.t["warn_select_merge"])
-            return
-
-        try:
-            num_outputs = int(self.entry_merge_outputs.get())
-            if num_outputs <= 0: raise ValueError
-        except ValueError:
-            messagebox.showerror(self.t["dialog_title_err"], self.t["err_invalid_outputs"])
-            return
-
-        target_dir = self.merge_output_dir if self.merge_output_dir else os.path.dirname(self.merge_source_files[0])
-
-        try:
-            opened_images = [Image.open(p) for p in self.merge_source_files]
-            max_width = max(img.size[0] for img in opened_images)
-            
-            total_height = 0
-            resized_images = []
-            for img in opened_images:
-                aspect_ratio = img.size[1] / img.size[0]
-                new_height = int(max_width * aspect_ratio)
-                img_resized = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
-                total_height += new_height
-                resized_images.append(img_resized)
-
-            # دمج تتابعي غير محدود الأبعاد في لوحة PNG كاملة الجودة والدقة
-            full_canvas = Image.new("RGB", (max_width, total_height), (255, 255, 255))
-            current_y = 0
-            for img in resized_images:
-                full_canvas.paste(img, (0, current_y))
-                current_y += img.size[1]
-
-            piece_height = total_height // num_outputs
-            first_file_name = os.path.splitext(os.path.basename(self.merge_source_files[0]))[0]
-
-            for i in range(num_outputs):
-                top = i * piece_height
-                bottom = total_height if i == num_outputs - 1 else (i + 1) * piece_height
-
-                box = (0, top, max_width, bottom)
-                final_piece = full_canvas.crop(box)
-
-                # تحديد اسم الملف النهائي بصيغة .png
-                if self.merge_naming_var.get() == "numeric":
-                    output_name = f"{i+1}.png"
-                else:
-                    output_name = f"{first_file_name}_part_{i+1}.png"
-
-                # حفظ المخرجات بصيغة PNG الأصلية (دون أي ضغط أو خسارة جودة)
-                final_piece.save(os.path.join(target_dir, output_name), "PNG")
-
-            messagebox.showinfo(self.t["dialog_title_success"], self.t["success_merge"])
-            os.startfile(target_dir)
-
-        except Exception as e:
-            messagebox.showerror(self.t["dialog_title_err"], f"{self.t['err_occurred']}{str(e)}")
-
-if __name__ == "__main__":
-    selector = LanguageSelector()
-    selector.mainloop()
+<div class="container">
+    <h1>Universal Client-Side Image Tool</h1>
     
-    if selector.selected_lang:
-        app = UniversalImageTool(selector.selected_lang)
-        app.mainloop()
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('split-tab')">✂️ Split Long Image</button>
+        <button class="tab-btn" onclick="switchTab('merge-tab')">🔗 Merge & Redistribute Images</button>
+    </div>
+
+    <div id="split-tab" class="tab-content active">
+        <div class="form-group">
+            <label for="split-input" class="file-upload-btn">📁 Select Long Image to Split</label>
+            <input type="file" id="split-input" accept="image/*">
+            <div id="split-status" class="file-status">No image selected yet</div>
+        </div>
+
+        <div class="form-group">
+            <label>Required Number of Pieces:</label>
+            <input type="number" id="split-pieces" value="5" min="1">
+        </div>
+
+        <div class="form-group">
+            <label>Output Files Naming Method:</label>
+            <div class="radio-group">
+                <label class="radio-option"><input type="radio" name="split-naming" value="numeric"> Numbers only (e.g., 1.png, 2.png)</label>
+                <label class="radio-option"><input type="radio" name="split-naming" value="basic" checked> Original name + Number (e.g., image_part_1.png)</label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <button class="action-btn btn-split" onclick="processSplit()">🚀 Start Splitting Process</button>
+        </div>
+    </div>
+
+    <div id="merge-tab" class="tab-content">
+        <div class="form-group">
+            <label for="merge-input" class="file-upload-btn merge-btn-color">📁 Select Images in Order</label>
+            <input type="file" id="merge-input" accept="image/*" multiple>
+            <div id="merge-status" class="file-status">No images selected yet.</div>
+        </div>
+
+        <div class="form-group">
+            <label>Number of Final Output Files Required:</label>
+            <input type="number" id="merge-outputs" value="20" min="1">
+        </div>
+
+        <div class="form-group">
+            <label>Output Files Naming Method:</label>
+            <div class="radio-group">
+                <label class="radio-option"><input type="radio" name="merge-naming" value="numeric"> Numbers only (e.g., 1.png, 2.png)</label>
+                <label class="radio-option"><input type="radio" name="merge-naming" value="basic" checked> First file name + Number (e.g., output_1.png)</label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <button class="action-btn btn-merge" onclick="processMerge()">🔗 Start Merging & Redistribution Now</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // التنقل بين التبويبات
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        
+        document.getElementById(tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
+    }
+
+    // تحديث نص واجهة اختيار صورة للتقطيع
+    const splitInput = document.getElementById('split-input');
+    const splitStatus = document.getElementById('split-status');
+    splitInput.addEventListener('change', () => {
+        if(splitInput.files.length > 0) {
+            splitStatus.innerText = splitInput.files[0].name;
+            splitStatus.style.display = 'block';
+        }
+    });
+
+    // تحديث نص واجهة اختيار صور متعددة للدمج
+    const mergeInput = document.getElementById('merge-input');
+    const mergeStatus = document.getElementById('merge-status');
+    mergeInput.addEventListener('change', () => {
+        if(mergeInput.files.length > 0) {
+            let fileNames = Array.from(mergeInput.files).map((f, i) => `[${i+1}] ${f.name}`).join('\n');
+            mergeStatus.innerText = fileNames;
+            mergeStatus.style.display = 'block';
+        }
+    });
+
+    // ترتيب طبيعي ذكي للملفات لتجنب لخبطة الأسماء الرقمية
+    function naturalSort(files) {
+        const collator = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
+        return Array.from(files).sort((a, b) => collator.compare(a.name, b.name));
+    }
+
+    // دالة مساعدة لتحميل الصورة برمجياً لـ Canvas
+    function loadImage(file) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = URL.createObjectURL(file);
+        });
+    }
+
+    // دالة مساعدة لبدء تحميل الملف تلقائياً للمتصفح
+    function downloadCanvasImage(canvas, filename) {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+
+    // ==================== منطق عملية التقطيع (Split) ====================
+    async function processSplit() {
+        if (splitInput.files.length === 0) {
+            alert("Please select a long image first!");
+            return;
+        }
+        const numPieces = parseInt(document.getElementById('split-pieces').value);
+        if (isNaN(numPieces) || numPieces <= 0) {
+            alert("Please enter a valid positive number for pieces!");
+            return;
+        }
+
+        try {
+            const file = splitInput.files[0];
+            const img = await loadImage(file);
+            const width = img.width;
+            const height = img.height;
+            const pieceHeight = Math.floor(height / numPieces);
+            
+            const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            const namingMethod = document.querySelector('input[name="split-naming"]:checked').value;
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = width;
+
+            for (let i = 0; i < numPieces; i++) {
+                let top = i * pieceHeight;
+                let bottom = (i === numPieces - 1) ? height : (i + 1) * piece_height;
+                if (i === numPieces - 1) bottom = height; // القطعة الأخيرة تأخذ المتبقي
+                
+                let currentPieceHeight = bottom - top;
+                canvas.height = currentPieceHeight;
+
+                ctx.drawImage(img, 0, top, width, currentPieceHeight, 0, 0, width, currentPieceHeight);
+
+                let outputName = (namingMethod === "numeric") ? `${i+1}.png` : `${originalName}_part_${i+1}.png`;
+                downloadCanvasImage(canvas, outputName);
+            }
+            alert("Image split successfully! Check your browser downloads folder.");
+        } catch (e) {
+            alert("An error occurred during splitting: " + e.message);
+        }
+    }
+
+    // ==================== منطق عملية الدمج والتقسيم (Merge & Redistribute) ====================
+    async function processMerge() {
+        if (mergeInput.files.length === 0) {
+            alert("Please select images to merge first!");
+            return;
+        }
+        const numOutputs = parseInt(document.getElementById('merge-outputs').value);
+        if (isNaN(numOutputs) || numOutputs <= 0) {
+            alert("Please enter a valid number of output files!");
+            return;
+        }
+
+        try {
+            // الترتيب الطبيعي للملفات المحددة
+            const sortedFiles = naturalSort(mergeInput.files);
+            const openedImages = [];
+            
+            // تحميل كل الصور ومعرفة العرض الأقصى
+            for (let file of sortedFiles) {
+                const img = await loadImage(file);
+                openedImages.push(img);
+            }
+            
+            const maxWidth = Math.max(...openedImages.map(img => img.width));
+            
+            // حساب الارتفاع الإجمالي بعد تعديل قياسات عرض كل الصور لتتناسب
+            let totalHeight = 0;
+            const imageRenderData = [];
+
+            for (let img of openedImages) {
+                let aspectRatio = img.height / img.width;
+                let newHeight = Math.floor(maxWidth * aspectRatio);
+                imageRenderData.push({ img, height: newHeight });
+                totalHeight += newHeight;
+            }
+
+            // إنشاء Canvas عملاق وسيط في الذاكرة (PNG Canvas غير محدود الأبعاد)
+            const mainCanvas = document.createElement('canvas');
+            mainCanvas.width = maxWidth;
+            mainCanvas.height = totalHeight;
+            const mainCtx = mainCanvas.getContext('2d');
+
+            // رسم الصور تتابعياً خلف بعضها على اللوحة العملاقة
+            let currentY = 0;
+            for (let data of imageRenderData) {
+                mainCtx.drawImage(data.img, 0, current_y, maxWidth, data.height);
+                currentY += data.height;
+            }
+
+            // البدء في تقطيع اللوحة العملاقة بالتساوي على عدد المخرجات المطلوبة
+            const pieceHeight = Math.floor(totalHeight / numOutputs);
+            const firstFileName = sortedFiles[0].name.substring(0, sortedFiles[0].name.lastIndexOf('.')) || sortedFiles[0].name;
+            const namingMethod = document.querySelector('input[name="merge-naming"]:checked').value;
+
+            const sliceCanvas = document.createElement('canvas');
+            sliceCanvas.width = maxWidth;
+            const sliceCtx = sliceCanvas.getContext('2d');
+
+            for (let i = 0; i < numOutputs; i++) {
+                let top = i * pieceHeight;
+                let bottom = (i === numOutputs - 1) ? totalHeight : (i + 1) * pieceHeight;
+                let currentPieceHeight = bottom - top;
+
+                sliceCanvas.height = currentPieceHeight;
+                sliceCtx.drawImage(mainCanvas, 0, top, maxWidth, currentPieceHeight, 0, 0, maxWidth, currentPieceHeight);
+
+                let outputName = (namingMethod === "numeric") ? `${i+1}.png` : `${firstFileName}_part_${i+1}.png`;
+                downloadCanvasImage(sliceCanvas, outputName);
+            }
+
+            alert("Images merged and redistributed into PNG successfully! Check your browser downloads folder.");
+        } catch (e) {
+            alert("An error occurred during merging: " + e.message);
+        }
+    }
+</script>
+
+</body>
+</html>
