@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Client-Side Image Tool (ZIP Output)</title>
+    <title> Client-Side Image Tool (Fixed ZIP Output)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body {
@@ -145,8 +145,8 @@
         .btn-merge:hover { background-color: #d35400; }
 
         .loading-text {
-            color: #7f8c8d;
-            font-size: 14px;
+            color: #e67e22;
+            font-size: 15px;
             margin-top: 10px;
             display: none;
             font-weight: bold;
@@ -225,7 +225,6 @@
         event.currentTarget.classList.add('active');
     }
 
-    // مصفوفة الامتدادات المسموح بها للفحص البرمجي اللاحق
     const allowedExtensions = /(\.jpg|\.jpeg|\.png|\.webp|\.bmp)$/i;
 
     const splitInput = document.getElementById('split-input');
@@ -233,7 +232,6 @@
     splitInput.addEventListener('change', () => {
         if(splitInput.files.length > 0) {
             const file = splitInput.files[0];
-            // التحقق البرمجي لحماية السكريبت
             if (!allowedExtensions.exec(file.name)) {
                 alert("Please select a valid image file (.png, .jpg, .webp) only!");
                 splitInput.value = "";
@@ -354,6 +352,7 @@
         }
     }
 
+    // ==================== الحل الجديد والآمن للدمج والتقطيع الفوري المتتالي ====================
     async function processMerge() {
         if (mergeInput.files.length === 0) {
             alert("Please select images to merge first!");
@@ -371,7 +370,6 @@
         loading.style.display = 'block';
 
         try {
-            // تصفية الملفات المحددة والتأكد من أنها صور فقط قبل الترتيب
             const filteredFiles = Array.from(mergeInput.files).filter(f => allowedExtensions.exec(f.name));
             const sortedFiles = naturalSort(filteredFiles);
             const openedImages = [];
@@ -383,54 +381,81 @@
             
             const maxWidth = Math.max(...openedImages.map(img => img.width));
             
-            let totalHeight = 0;
-            const imageRenderData = [];
+            // حساب أبعاد المخطط التخيلي للصور دون رسمها لتجنب انهيار الذاكرة
+            let totalVirtualHeight = 0;
+            const virtualImagesInfo = [];
 
             for (let img of openedImages) {
                 let aspectRatio = img.height / img.width;
                 let newHeight = Math.floor(maxWidth * aspectRatio);
-                imageRenderData.push({ img, height: newHeight });
-                totalHeight += newHeight;
+                virtualImagesInfo.push({
+                    img: img,
+                    vTop: totalVirtualHeight,
+                    vBottom: totalVirtualHeight + newHeight,
+                    vHeight: newHeight
+                });
+                totalVirtualHeight += newHeight;
             }
 
-            const mainCanvas = document.createElement('canvas');
-            mainCanvas.width = maxWidth;
-            mainCanvas.height = totalHeight;
-            const mainCtx = mainCanvas.getContext('2d');
-
-            let currentY = 0;
-            for (let data of imageRenderData) {
-                mainCtx.drawImage(data.img, 0, currentY, maxWidth, data.height);
-                currentY += data.height;
-            }
-
-            const pieceHeight = Math.floor(totalHeight / numOutputs);
+            // حساب الطول المثالي الدقيق للقطعة المخرجة الواحدة
+            const outputPieceHeight = Math.floor(totalVirtualHeight / numOutputs);
             const firstFileName = sortedFiles[0].name.substring(0, sortedFiles[0].name.lastIndexOf('.')) || sortedFiles[0].name;
             const namingMethod = document.querySelector('input[name="merge-naming"]:checked').value;
 
             const zip = new JSZip();
+            
+            // لوحة رسم صغيرة بحجم القطعة الواحدة فقط (تستهلك ذاكرة شبه منعدمة)
             const sliceCanvas = document.createElement('canvas');
             sliceCanvas.width = maxWidth;
             const sliceCtx = sliceCanvas.getContext('2d');
 
+            // حلقة بناء القطع المخرجة الـ 20 بالتتالي الذكي
             for (let i = 0; i < numOutputs; i++) {
-                let top = i * pieceHeight;
-                let bottom = (i === numOutputs - 1) ? totalHeight : (i + 1) * pieceHeight;
-                let currentPieceHeight = bottom - top;
+                let pTop = i * outputPieceHeight;
+                let pBottom = (i === numOutputs - 1) ? totalVirtualHeight : (i + 1) * outputPieceHeight;
+                let currentPieceHeight = pBottom - pTop;
 
                 sliceCanvas.height = currentPieceHeight;
-                sliceCtx.drawImage(mainCanvas, 0, top, maxWidth, currentPieceHeight, 0, 0, maxWidth, currentPieceHeight);
+                
+                // تنظيف اللوحة قبل الرسم عليها بلون خلفية أبيض
+                sliceCtx.fillStyle = "#FFFFFF";
+                sliceCtx.fillRect(0, 0, maxWidth, currentPieceHeight);
+
+                // البحث عن الصور الأصلية التي تتقاطع مع أبعاد هذه القطعة ورسم الجزء المتقاطع فقط
+                for (let info of virtualImagesInfo) {
+                    if (info.vBottom > pTop && info.vTop < pBottom) {
+                        // حساب الجزء المشترك المراد قصه ورسمه
+                        let intersectTop = Math.max(pTop, info.vTop);
+                        let intersectBottom = Math.min(pBottom, info.vBottom);
+                        
+                        // تحديد الإحداثيات على الصورة الأصلية
+                        let srcY = ((intersectTop - info.vTop) / info.vHeight) * info.img.height;
+                        let srcHeight = ((intersectBottom - intersectTop) / info.vHeight) * info.img.height;
+                        
+                        // تحديد موقع الرسم داخل اللوحة الصغيرة الحالية
+                        let destY = intersectTop - pTop;
+                        let destHeight = intersectBottom - intersectTop;
+
+                        sliceCtx.drawImage(
+                            info.img,
+                            0, srcY, info.img.width, srcHeight, // القص من الأصل
+                            0, destY, maxWidth, destHeight     // الرسم في القطعة
+                        );
+                    }
+                }
 
                 let outputName = (namingMethod === "numeric") ? `${i+1}.png` : `${firstFileName}_part_${i+1}.png`;
                 
+                // الحفظ الفوري المشفر داخل الـ ZIP
                 const imageBlob = await canvasToBlob(sliceCanvas);
                 zip.file(outputName, imageBlob);
             }
 
+            // تصدير ملف الـ ZIP النهائي
             const zipContent = await zip.generateAsync({type: "blob"});
             downloadZipFile(zipContent, `${firstFileName}_redistributed_output.zip`);
 
-            alert("Success! Images merged, redistributed and downloaded inside one ZIP file.");
+            alert("Success! Images processed perfectly with zero memory limitations. Check your ZIP!");
         } catch (e) {
             alert("An error occurred during merging: " + e.message);
         } finally {
