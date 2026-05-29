@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Client-Side Image Tool (ZIP Output)</title>
+    <title>Universal Client-Side Image Tool (ZIP Output)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body {
@@ -166,8 +166,7 @@
     <div id="split-tab" class="tab-content active">
         <div class="form-group">
             <label for="split-input" class="file-upload-btn">📁 Select Long Image to Split</label>
-            <!-- تم تعديل حقل الاختيار هنا ليفتح مدير الملفات مباشرة بدلاً من الاستوديو -->
-            <input type="file" id="split-input" accept=".png,.jpg,.jpeg,.webp,.bmp">
+            <input type="file" id="split-input" accept="*/*">
             <div id="split-status" class="file-status">No image selected yet</div>
         </div>
 
@@ -193,8 +192,7 @@
     <div id="merge-tab" class="tab-content">
         <div class="form-group">
             <label for="merge-input" class="file-upload-btn merge-btn-color">📁 Select Images in Order</label>
-            <!-- تم تعديل حقل الاختيار المتعدد هنا ليفتح مدير الملفات مباشرة بدلاً من الاستوديو -->
-            <input type="file" id="merge-input" accept=".png,.jpg,.jpeg,.webp,.bmp" multiple>
+            <input type="file" id="merge-input" accept="*/*" multiple>
             <div id="merge-status" class="file-status">No images selected yet.</div>
         </div>
 
@@ -227,11 +225,22 @@
         event.currentTarget.classList.add('active');
     }
 
+    // مصفوفة الامتدادات المسموح بها للفحص البرمجي اللاحق
+    const allowedExtensions = /(\.jpg|\.jpeg|\.png|\.webp|\.bmp)$/i;
+
     const splitInput = document.getElementById('split-input');
     const splitStatus = document.getElementById('split-status');
     splitInput.addEventListener('change', () => {
         if(splitInput.files.length > 0) {
-            splitStatus.innerText = splitInput.files[0].name;
+            const file = splitInput.files[0];
+            // التحقق البرمجي لحماية السكريبت
+            if (!allowedExtensions.exec(file.name)) {
+                alert("Please select a valid image file (.png, .jpg, .webp) only!");
+                splitInput.value = "";
+                splitStatus.style.display = 'none';
+                return;
+            }
+            splitStatus.innerText = file.name;
             splitStatus.style.display = 'block';
         }
     });
@@ -240,7 +249,21 @@
     const mergeStatus = document.getElementById('merge-status');
     mergeInput.addEventListener('change', () => {
         if(mergeInput.files.length > 0) {
-            let fileNames = Array.from(mergeInput.files).map((f, i) => `[${i+1}] ${f.name}`).join('\n');
+            let validFiles = [];
+            for(let file of mergeInput.files) {
+                if (allowedExtensions.exec(file.name)) {
+                    validFiles.push(file);
+                }
+            }
+            
+            if(validFiles.length === 0) {
+                alert("No valid images selected!");
+                mergeInput.value = "";
+                mergeStatus.style.display = 'none';
+                return;
+            }
+
+            let fileNames = validFiles.map((f, i) => `[${i+1}] ${f.name}`).join('\n');
             mergeStatus.innerText = fileNames;
             mergeStatus.style.display = 'block';
         }
@@ -348,7 +371,9 @@
         loading.style.display = 'block';
 
         try {
-            const sortedFiles = naturalSort(mergeInput.files);
+            // تصفية الملفات المحددة والتأكد من أنها صور فقط قبل الترتيب
+            const filteredFiles = Array.from(mergeInput.files).filter(f => allowedExtensions.exec(f.name));
+            const sortedFiles = naturalSort(filteredFiles);
             const openedImages = [];
             
             for (let file of sortedFiles) {
