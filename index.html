@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Client-Side Image Tool (ZIP Output)</title>
+    <title>Client-Side Image Tool (ZIP Output)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body {
@@ -166,7 +166,8 @@
     <div id="split-tab" class="tab-content active">
         <div class="form-group">
             <label for="split-input" class="file-upload-btn">📁 Select Long Image to Split</label>
-            <input type="file" id="split-input" accept="image/*">
+            <!-- تم تعديل حقل الاختيار هنا ليفتح مدير الملفات مباشرة بدلاً من الاستوديو -->
+            <input type="file" id="split-input" accept=".png,.jpg,.jpeg,.webp,.bmp">
             <div id="split-status" class="file-status">No image selected yet</div>
         </div>
 
@@ -192,7 +193,8 @@
     <div id="merge-tab" class="tab-content">
         <div class="form-group">
             <label for="merge-input" class="file-upload-btn merge-btn-color">📁 Select Images in Order</label>
-            <input type="file" id="merge-input" accept="image/*" multiple>
+            <!-- تم تعديل حقل الاختيار المتعدد هنا ليفتح مدير الملفات مباشرة بدلاً من الاستوديو -->
+            <input type="file" id="merge-input" accept=".png,.jpg,.jpeg,.webp,.bmp" multiple>
             <div id="merge-status" class="file-status">No images selected yet.</div>
         </div>
 
@@ -258,14 +260,12 @@
         });
     }
 
-    // دالة مساعدة لتحويل الـ Canvas إلى ملف (Blob) بصيغة ثنائية لتخزينه في الـ ZIP
     function canvasToBlob(canvas) {
         return new Promise((resolve) => {
             canvas.toBlob((blob) => resolve(blob), 'image/png');
         });
     }
 
-    // دالة مساعدة لبدء تحميل ملف الـ ZIP النهائي للمستخدم
     function downloadZipFile(blob, filename) {
         const link = document.createElement('a');
         link.download = filename;
@@ -273,7 +273,6 @@
         link.click();
     }
 
-    // ==================== منطق التقطيع وحفظ النتيجة كـ ZIP ====================
     async function processSplit() {
         if (splitInput.files.length === 0) {
             alert("Please select a long image first!");
@@ -300,7 +299,6 @@
             const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
             const namingMethod = document.querySelector('input[name="split-naming"]:checked').value;
 
-            // إنشاء كائن الـ ZIP الجديد
             const zip = new JSZip();
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -317,12 +315,10 @@
 
                 let outputName = (namingMethod === "numeric") ? `${i+1}.png` : `${originalName}_part_${i+1}.png`;
                 
-                // تحويل الصورة لبيانات ثنائية وإضافتها لملف الـ ZIP
                 const imageBlob = await canvasToBlob(canvas);
                 zip.file(outputName, imageBlob);
             }
 
-            // توليد ملف الـ ZIP وتنزيله دفعة واحدة
             const zipContent = await zip.generateAsync({type: "blob"});
             downloadZipFile(zipContent, `${originalName}_split_pieces.zip`);
             
@@ -335,7 +331,6 @@
         }
     }
 
-    // ==================== منطق الدمج والتقسيم وحفظ النتيجة كـ ZIP ====================
     async function processMerge() {
         if (mergeInput.files.length === 0) {
             alert("Please select images to merge first!");
@@ -388,7 +383,6 @@
             const firstFileName = sortedFiles[0].name.substring(0, sortedFiles[0].name.lastIndexOf('.')) || sortedFiles[0].name;
             const namingMethod = document.querySelector('input[name="merge-naming"]:checked').value;
 
-            // إنشاء كائن الـ ZIP للدمج
             const zip = new JSZip();
             const sliceCanvas = document.createElement('canvas');
             sliceCanvas.width = maxWidth;
@@ -408,7 +402,6 @@
                 zip.file(outputName, imageBlob);
             }
 
-            // توليد ملف الـ ZIP وتنزيله دفعة واحدة
             const zipContent = await zip.generateAsync({type: "blob"});
             downloadZipFile(zipContent, `${firstFileName}_redistributed_output.zip`);
 
